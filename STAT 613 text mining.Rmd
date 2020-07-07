@@ -1,0 +1,269 @@
+---
+title: "Untitled"
+author: "Rabya Ghafoor"
+date: "4/1/2020"
+output: pdf_document
+---
+```{r}
+library(dplyr)
+library(gutenbergr)
+library(stringr)
+library(scales)
+library(tidytext)
+library(janeaustenr)
+library(tidyr)
+library(ggplot2)
+```
+
+Exercise #1
+```{r}
+orig_books <- austen_books() %>%
+  group_by(book) %>%
+  mutate(linenumber = row_number(),
+         chapter = cumsum(str_detect(text,
+                                     regex("^chapter [\\divxlc]",
+                                           ignore_case = TRUE)))) %>%
+  ungroup() %>%
+  select(chapter, linenumber, everything())
+orig_books
+```
+
+```{r}
+tidy_books <- orig_books %>%
+  unnest_tokens(word, text) %>%
+# use str_extract because some gutenberg texts have other symbols around
+# the words as part of the encoding
+  mutate(word = str_extract(word, "[a-z']+")) %>%
+  anti_join(stop_words)
+```
+```{r}
+tidy_books %>%
+  count(word, sort = TRUE)
+```
+
+
+
+
+```{r}
+hgwells <-  gutenberg_works(author == "Wells, H. G. (Herbert George)") 
+bronte <- gutenberg_works(author ==  "Brontë, Charlotte" | author ==  "Brontë, Anne" | author == "Brontë, Emily" ) 
+```
+
+```{r}
+hgwells <- hgwells %>% gutenberg_download()
+```
+```{r}
+bronte <- bronte %>% gutenberg_download()
+```
+```{r}
+tidy_hgwells <- hgwells %>%
+  unnest_tokens(word, text) %>%
+  mutate(word = str_extract(word, "[a-z']+")) %>%
+  anti_join(stop_words)
+
+tidy_bronte <- bronte %>%
+  unnest_tokens(word, text) %>%
+  mutate(word = str_extract(word, "[a-z']+")) %>%
+  anti_join(stop_words)
+tidy_hgwells %>%
+  count(word, sort = TRUE)
+tidy_bronte %>%
+  count(word, sort = TRUE)
+
+```
+
+```{r}
+frequency_by_word_across_authors <- bind_rows(mutate(tidy_bronte,
+author = "Bronte"),
+mutate(tidy_hgwells, author = "Wells"),
+mutate(tidy_books, author = "Austen")) %>%
+  mutate(word = str_extract(word, "[a-z']+")) %>%
+  count(author, word) %>%
+  group_by(author) %>%
+  mutate(proportion = n / sum(n)) %>%
+  select(-n) %>%
+  spread(author, proportion)
+frequency_by_word_across_authors
+```
+
+```{r}
+frequency <- frequency_by_word_across_authors %>%
+  gather(author, proportion, `Bronte`:`Wells`)
+frequency
+```
+
+```{r}
+#Compare word frequency by author to Austen
+frequency %>% ggplot(aes(x = proportion,
+                         y = `Austen`,
+                         color = abs(`Austen` - proportion))) +
+  geom_abline(color = "gray40", lty = 2) +
+  geom_jitter(alpha = 0.1, size = 2.5,
+              width = 0.3, height = 0.3) +
+  geom_text(aes(label = word),
+            check_overlap = TRUE, vjust = 1.5) +
+  scale_x_log10(labels = percent_format()) +
+  scale_y_log10(labels = percent_format()) +
+  scale_color_gradient(limits = c(0, 0.001),
+                       low = "darkslategray4",
+                       high = "gray75") +
+  facet_wrap(~author, ncol = 2) +
+  theme(legend.position="none") +
+  labs(y = "Jane Austen", x = NULL)
+```
+We can tell that Austen and Bronte are more similar (grouped closer to the line) than Austen and Wells.
+Let’s use a correlation test to quantify the amounts.
+
+
+```{r}
+df_Bronte <- frequency[frequency$author == "Bronte",]
+df_Bronte
+```
+```{r}
+cor.test(data = df_Bronte, ~ proportion + `Austen`)
+```
+
+```{r}
+df_Wells <- frequency[frequency$author == "Wells",]
+df_Wells
+```
+
+```{r}
+cor.test(data = df_Wells, ~ proportion + `Austen`)
+```
+
+Exercise #2
+
+```{r}
+jearle <-  gutenberg_works(author == "Earle, John") 
+meale <- gutenberg_works(author == "Eales, Mary") 
+dok <- gutenberg_works(author == "Oakey, Daniel") 
+```
+
+
+```{r}
+jearle <- jearle %>% gutenberg_download()
+```
+```{r}
+meale <- meale %>% gutenberg_download()
+```
+
+```{r}
+dok <- dok %>% gutenberg_download()
+```
+
+```{r}
+#tidy data, remove stopwards
+
+tidy_jearle <- jearle %>%
+  unnest_tokens(word, text) %>%
+  mutate(word = str_extract(word, "[a-z']+")) %>%
+  anti_join(stop_words)
+
+tidy_meale <- meale %>%
+  unnest_tokens(word, text) %>%
+  mutate(word = str_extract(word, "[a-z']+")) %>%
+  anti_join(stop_words)
+
+tidy_dok <- dok %>%
+  unnest_tokens(word, text) %>%
+  mutate(word = str_extract(word, "[a-z']+")) %>%
+  anti_join(stop_words)
+
+tidy_jearle %>%
+  count(word, sort = TRUE)
+tidy_meale %>%
+  count(word, sort = TRUE)
+tidy_dok %>%
+  count(word, sort = TRUE)
+```
+
+
+```{r}
+
+frequency_by_word_across_authors_new <- bind_rows(mutate(tidy_jearle,
+author = "Earle"),
+mutate(tidy_meale, author = "Eales"),
+mutate(tidy_dok, author = "Oakey")) %>%
+  mutate(word = str_extract(word, "[a-z']+")) %>%
+  count(author, word) %>%
+  group_by(author) %>%
+  mutate(proportion = n / sum(n)) %>%
+  select(-n) %>%
+  spread(author, proportion)
+frequency_by_word_across_authors_new
+```
+```{r}
+frequency1 <- frequency_by_word_across_authors_new %>%
+  gather(author, proportion, `Earle`:`Oakey`)
+frequency1
+```
+
+
+
+```{r}
+frequency1 %>% ggplot(aes(x = proportion,
+                         y = `Eales`,
+                         color = abs(`Eales` - proportion))) +
+  geom_abline(color = "gray40", lty = 2) +
+  geom_jitter(alpha = 0.1, size = 2.5,
+              width = 0.3, height = 0.3) +
+  geom_text(aes(label = word),
+            check_overlap = TRUE, vjust = 1.5) +
+  scale_x_log10(labels = percent_format()) +
+  scale_y_log10(labels = percent_format()) +
+  scale_color_gradient(limits = c(0, 0.001),
+                       low = "darkslategray4",
+                       high = "gray75") +
+  facet_wrap(~author, ncol = 2) +
+  theme(legend.position="none") +
+  labs(y = "Mary Eales", x = NULL)
+```
+
+```{r}
+df_Earle <- frequency1[frequency1$author == "Earle",]
+df_Earle
+```
+
+```{r}
+df_Oakey <- frequency1[frequency1$author == "Oakey",]
+df_Oakey
+```
+
+```{r}
+cor.test(data = df_Earle, ~ proportion + `Eales`)
+```
+```{r}
+cor.test(data = df_Oakey, ~ proportion + `Eales`)
+```
+
+According to the graph we can tell that Eales and Earle are more similar (words are grouped closer to the line) than Eales and Okaey. The correlation test is consistent with these findings as the correlation coeffecient between Eales and Earle is slightly larger (0.16) than Eales and Oakey (0.11).
+
+Exercise #3
+```{r}
+library(textdata)
+```
+```{r}
+sentiments
+sentiments %>% arrange(word)
+```
+
+```{r}
+cdic <- gutenberg_works(author == "Dickens, Charles") %>% filter(title == "A Tale of Two Cities")
+cdic <- cdic %>% gutenberg_download()
+```
+
+```{r}
+tidy_cdic <- cdic %>%
+  unnest_tokens(word, text) %>%
+  mutate(word = str_extract(word, "[a-z']+")) %>%
+  anti_join(stop_words)
+tidy_cdic %>%
+  count(word, sort = TRUE)
+```
+```{r}
+# select only the words from the nrc lexicon that are "fear" words
+install.packages("bing")
+```
+```{r}
+
